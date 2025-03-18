@@ -2,12 +2,18 @@
 #include <Adafruit_ADS1X15.h>
 #include <Temperature_LM75_Derived.h>
 
+// #define USE_ONBOARD_TEMP_SENSOR
+#define USE_EXTERNAL_ADC
+// #define USE_INTERNAL_ADC
+
 #define BUTTON1 PB3
 #define BUTTON2 PB4
 #define BUTTON3 PB5
 #define LED1 PB13
 #define LED2 PB14
 #define LED3 PB15
+#define ISO_OUTPUT PA12
+#define ISO_INPUT PA11
 
 #define READ_TEMP_PERIOD_SECONDS 10
 #define READ_ADC_PERIOD_MICROSECONDS 1000
@@ -35,11 +41,13 @@ void setup() {
   pinMode(BUTTON1, INPUT);
   pinMode(BUTTON2, INPUT);
   pinMode(BUTTON3, INPUT);
-  
+  pinMode(ISO_INPUT, OUTPUT);
+
   // LED Digital outputs
   pinMode(LED1, OUTPUT);
   pinMode(LED2, OUTPUT);
   pinMode(LED3, OUTPUT);
+  pinMode(ISO_OUTPUT, OUTPUT);
 
   // The ADC input range (or gain) can be changed via the following
   // functions, but be careful never to exceed VDD +0.3V max, or to
@@ -48,22 +56,24 @@ void setup() {
   //                                                                ADS1015  ADS1115
   //                                                                -------  -------
   // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
-  // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
+  ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
   // ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
   // ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
   // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
-  ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
+  // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
 
   if (!ads.begin(73U, &wire)) {
     serial1.println("Failed to initialize ADS.");
     while (1);
   }
 
+  #ifdef USE_ONBOARD_TEMP_SENSOR
   HardwareTimer *timerTemp = new HardwareTimer(TIM1);
   timerTemp->setMode(1, TIMER_OUTPUT_DISABLED, NC);
   timerTemp->setOverflow(READ_TEMP_PERIOD_SECONDS * 1000000U, MICROSEC_FORMAT);
   timerTemp->attachInterrupt(readTempIsr);
   timerTemp->resume();
+  #endif
 
   HardwareTimer *timerAdc = new HardwareTimer(TIM2);
   timerAdc->setMode(1, TIMER_OUTPUT_DISABLED, NC);
@@ -99,14 +109,24 @@ void readTempIsr() {
 void readAdcIsr() {
   
   int16_t adcResult;
-  const float adcScaling = 0.1875F/16; /* ADS1115  @ +/- 0.256V gain (16-bit results) */
+  const float adcScaling = 0.125F; /* ADS1115  @ +/- 4,096V gain (16-bit results) */
 
+  #ifdef USE_EXTERNAL_ADC
   adcResult = ads.readADC_SingleEnded(0);
+  analogRead(PA2);
 
   serial1.print("AIN0: "); 
   serial1.print(adcResult); 
   serial1.print("("); 
   serial1.print(adcResult * adcScaling); 
   serial1.println("mV)");
+  #endif
+
+  #ifdef USE_INTERNAL_ADC
+  adcResult = analogRead(PA2);
+
+  serial1.print("PA2: "); 
+  serial1.println(adcResult); 
+  #endif
 
 }
